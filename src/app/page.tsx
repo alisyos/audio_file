@@ -60,8 +60,8 @@ export default function Home() {
       
       console.log(`파일 변환 완료: ${originalSizeMB}MB → ${convertedSizeMB}MB (${compressionRatio}% 압축)`);
       setError('');
-    } catch (err) {
-      console.error('변환 오류:', err);
+    } catch (error) {
+      console.error('변환 오류:', error);
       setError('파일 변환 중 오류가 발생했습니다. 브라우저가 이 파일 형식을 지원하지 않을 수 있습니다.');
     } finally {
       setIsConverting(false);
@@ -94,7 +94,7 @@ export default function Home() {
       } else {
         setError(data.error || '음성 변환에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('음성 변환 중 오류가 발생했습니다.');
     } finally {
       setIsTranscribing(false);
@@ -122,7 +122,7 @@ export default function Home() {
       } else {
         setError('문서 유형 분석에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('문서 유형 분석 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzing(false);
@@ -163,7 +163,7 @@ export default function Home() {
       } else {
         setError(data.error || '문서 생성에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('문서 생성 중 오류가 발생했습니다.');
     } finally {
       setIsGenerating(false);

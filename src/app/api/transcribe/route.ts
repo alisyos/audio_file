@@ -111,8 +111,9 @@ export async function POST(request: NextRequest) {
           console.log(`M4A transcription successful with MIME type: ${mimeTypes[i]}`);
           break; // 성공하면 루프 종료
           
-        } catch (error: any) {
-          console.log(`M4A transcription failed with MIME type ${mimeTypes[i]}:`, error.message);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.log(`M4A transcription failed with MIME type ${mimeTypes[i]}:`, errorMessage);
           lastError = error;
           
           // 마지막 시도가 아니면 계속
@@ -141,18 +142,21 @@ export async function POST(request: NextRequest) {
       success: true 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Transcription error:', error);
-    console.error('Error details:', {
+    
+    const errorDetails = error instanceof Error ? {
       message: error.message,
-      status: error.status,
-      code: error.code,
-      type: error.type,
-      param: error.param
-    });
+      status: (error as { status?: number }).status,
+      code: (error as { code?: string }).code,
+      type: (error as { type?: string }).type,
+      param: (error as { param?: string }).param
+    } : { message: 'Unknown error' };
+    
+    console.error('Error details:', errorDetails);
     
     // OpenAI API 에러인 경우 더 구체적인 메시지 제공
-    if (error.status === 400 && error.message?.includes('Invalid file format')) {
+    if (errorDetails.status === 400 && errorDetails.message?.includes('Invalid file format')) {
       if (fileExtension === 'm4a') {
         return NextResponse.json({ 
           error: `M4A 파일 처리 중 오류가 발생했습니다. 여러 MIME 타입으로 시도했지만 모두 실패했습니다.\n\n해결 방법:\n1. 파일을 MP3로 변환 후 업로드\n2. 파일을 WAV로 변환 후 업로드\n3. 다른 M4A 파일로 시도\n4. 파일이 손상되지 않았는지 확인\n\n참고: iPhone에서 녹음된 일부 M4A 파일은 특별한 인코딩으로 인해 호환성 문제가 있을 수 있습니다.` 

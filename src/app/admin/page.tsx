@@ -31,7 +31,7 @@ export default function AdminPage() {
       } else {
         setError(data.error || '프롬프트 로드 실패');
       }
-    } catch (err) {
+    } catch {
       setError('프롬프트 로드 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -65,7 +65,7 @@ export default function AdminPage() {
       } else {
         setError(data.error || '저장 실패');
       }
-    } catch (err) {
+    } catch {
       setError('저장 중 오류가 발생했습니다.');
     } finally {
       setSaving(null);
@@ -97,7 +97,7 @@ export default function AdminPage() {
       } else {
         setError(data.error || '상태 변경 실패');
       }
-    } catch (err) {
+    } catch {
       setError('상태 변경 중 오류가 발생했습니다.');
     }
   };
@@ -123,7 +123,7 @@ export default function AdminPage() {
       } else {
         setError('초기화 실패');
       }
-    } catch (err) {
+    } catch {
       setError('초기화 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);

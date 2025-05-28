@@ -1,7 +1,7 @@
 // 오디오 파일을 최적화된 WAV 형식으로 변환하는 유틸리티
 export async function convertToOptimizedWav(file: File, maxSizeBytes: number = 25 * 1024 * 1024): Promise<File> {
   return new Promise((resolve, reject) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = new (window.AudioContext || (window as unknown as typeof AudioContext))();
     const fileReader = new FileReader();
 
     fileReader.onload = async (e) => {
@@ -156,5 +156,5 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
 
 // 파일이 변환 가능한지 확인
 export function canConvertAudio(): boolean {
-  return !!(window.AudioContext || (window as any).webkitAudioContext);
+  return !!(window.AudioContext || (window as unknown as typeof AudioContext));
 } 

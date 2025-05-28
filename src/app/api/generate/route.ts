@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
 
     // 활성화된 프롬프트 가져오기
     const prompts = await getPrompts();
-    const systemPrompt = prompts.find((p: any) => p.id === 'generate-system' && p.isActive)?.prompt || 
+    const systemPrompt = prompts.find((p: { id: string; isActive: boolean; prompt: string }) => p.id === 'generate-system' && p.isActive)?.prompt || 
       '당신은 전문적인 문서 작성 전문가입니다. 주어진 텍스트와 구조를 바탕으로 완성도 높은 문서를 작성합니다.';
     
-    const userPromptTemplate = prompts.find((p: any) => p.id === 'generate-user' && p.isActive)?.prompt || 
+    const userPromptTemplate = prompts.find((p: { id: string; isActive: boolean; prompt: string }) => p.id === 'generate-user' && p.isActive)?.prompt || 
       `다음 원본 텍스트를 바탕으로 "{selectedType}" 형식의 문서를 작성해주세요.
 
 원본 텍스트: "{text}"

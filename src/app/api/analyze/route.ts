@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
 
     // 활성화된 프롬프트 가져오기
     const prompts = await getPrompts();
-    const systemPrompt = prompts.find((p: any) => p.id === 'analyze-system' && p.isActive)?.prompt || 
+    const systemPrompt = prompts.find((p: { id: string; isActive: boolean; prompt: string }) => p.id === 'analyze-system' && p.isActive)?.prompt || 
       '당신은 텍스트 내용을 분석하여 적절한 문서 형식을 제안하는 전문가입니다. 항상 JSON 형식으로 응답하세요.';
     
-    const userPromptTemplate = prompts.find((p: any) => p.id === 'analyze-user' && p.isActive)?.prompt || 
+    const userPromptTemplate = prompts.find((p: { id: string; isActive: boolean; prompt: string }) => p.id === 'analyze-user' && p.isActive)?.prompt || 
       `다음 텍스트를 분석하여 가장 적절한 문서 유형 3가지를 제안해주세요. 
 각 문서 유형에 대해 구체적인 목차를 포함해서 JSON 형식으로 응답해주세요.
 
