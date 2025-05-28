@@ -59,10 +59,22 @@ export default function Home() {
       const compressionRatio = ((1 - converted.size / file.size) * 100).toFixed(1);
       
       console.log(`파일 변환 완료: ${originalSizeMB}MB → ${convertedSizeMB}MB (${compressionRatio}% 압축)`);
+      
+      // 변환 결과 검증
+      if (converted.size > file.size) {
+        console.warn('변환된 파일이 원본보다 큽니다. 원본 파일을 그대로 사용하는 것이 좋을 수 있습니다.');
+      }
+      
+      if (converted.size > 4 * 1024 * 1024) {
+        setError(`변환된 파일이 여전히 큽니다 (${convertedSizeMB}MB). 더 짧은 오디오를 사용하거나 다른 압축 방법을 시도해보세요.`);
+        return;
+      }
+      
       setError('');
     } catch (error) {
       console.error('변환 오류:', error);
-      setError('파일 변환 중 오류가 발생했습니다. 브라우저가 이 파일 형식을 지원하지 않을 수 있습니다.');
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      setError(`파일 변환 중 오류가 발생했습니다: ${errorMessage}\n\n다른 방법을 시도해보세요:\n1. 더 짧은 오디오 파일 사용\n2. 다른 오디오 형식으로 변환\n3. 외부 도구로 파일 압축`);
     } finally {
       setIsConverting(false);
     }
@@ -85,6 +97,11 @@ export default function Home() {
         body: formData,
       });
 
+      if (response.status === 413) {
+        setError(`파일이 너무 큽니다 (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB). 배포 환경에서는 4MB 이하의 파일만 처리 가능합니다.\n\n해결 방법:\n1. M4A 파일인 경우 "최적화된 WAV로 변환" 버튼을 사용하세요\n2. 더 짧은 오디오 파일을 사용하세요\n3. 다른 압축 도구로 파일 크기를 줄여보세요`);
+        return;
+      }
+
       const data: TranscriptionResponse = await response.json();
 
       if (data.success) {
@@ -94,8 +111,9 @@ export default function Home() {
       } else {
         setError(data.error || '음성 변환에 실패했습니다.');
       }
-    } catch {
-      setError('음성 변환 중 오류가 발생했습니다.');
+    } catch (error) {
+      console.error('Transcription error:', error);
+      setError('음성 변환 중 네트워크 오류가 발생했습니다.');
     } finally {
       setIsTranscribing(false);
     }
@@ -310,10 +328,16 @@ export default function Home() {
                     음성 파일을 선택하세요
                   </p>
                   <p className="text-sm text-gray-500">
-                    지원 형식: FLAC, M4A, MP3, MP4, MPEG, MPGA, OGA, OGG, WAV, WEBM (최대 25MB)
+                    지원 형식: FLAC, M4A, MP3, MP4, MPEG, MPGA, OGA, OGG, WAV, WEBM (최대 4MB)
                   </p>
                   <p className="text-xs text-orange-600 mt-1">
-                    ⚠️ M4A 파일 호환성 문제가 있을 경우 MP3로 변환 후 업로드해주세요
+                    ⚠️ M4A 파일은 호환성 문제가 있을 수 있습니다. 최적화된 WAV로 변환하는 것을 권장합니다.
+                  </p>
+                  <p className="text-xs text-orange-600 mb-2">
+                    최적화 변환: 모노 변환 + 적응형 샘플링 레이트 (4-16kHz)로 4MB 이하로 압축
+                  </p>
+                  <p className="text-xs text-blue-600 mb-2">
+                    💡 음성 길이에 따라 자동으로 최적 품질 선택 (5분 이하: 16kHz, 10분 이하: 11kHz, 그 이상: 8kHz)
                   </p>
                 </label>
               </div>
@@ -334,7 +358,10 @@ export default function Home() {
                         ⚠️ M4A 파일은 호환성 문제가 있을 수 있습니다. 최적화된 WAV로 변환하는 것을 권장합니다.
                       </p>
                       <p className="text-xs text-orange-600 mb-2">
-                        최적화 변환: 모노 변환 + 낮은 샘플링 레이트 (16kHz/8kHz)로 파일 크기 대폭 감소
+                        최적화 변환: 모노 변환 + 적응형 샘플링 레이트 (4-16kHz)로 4MB 이하로 압축
+                      </p>
+                      <p className="text-xs text-blue-600 mb-2">
+                        💡 음성 길이에 따라 자동으로 최적 품질 선택 (5분 이하: 16kHz, 10분 이하: 11kHz, 그 이상: 8kHz)
                       </p>
                       {!convertedFile ? (
                         <button

@@ -1,5 +1,5 @@
 // 오디오 파일을 최적화된 WAV 형식으로 변환하는 유틸리티
-export async function convertToOptimizedWav(file: File, maxSizeBytes: number = 25 * 1024 * 1024): Promise<File> {
+export async function convertToOptimizedWav(file: File, maxSizeBytes: number = 4 * 1024 * 1024): Promise<File> {
   return new Promise((resolve, reject) => {
     const audioContext = new (window.AudioContext || (window as unknown as typeof AudioContext))();
     const fileReader = new FileReader();
@@ -9,32 +9,66 @@ export async function convertToOptimizedWav(file: File, maxSizeBytes: number = 2
         const arrayBuffer = e.target?.result as ArrayBuffer;
         let audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         
+        console.log('Original audio:', {
+          duration: audioBuffer.duration,
+          sampleRate: audioBuffer.sampleRate,
+          channels: audioBuffer.numberOfChannels,
+          length: audioBuffer.length
+        });
+        
         // 1. 모노로 변환 (파일 크기 50% 감소)
         if (audioBuffer.numberOfChannels > 1) {
           audioBuffer = convertToMono(audioBuffer, audioContext);
         }
         
-        // 2. 샘플링 레이트 최적화
-        let targetSampleRate = audioBuffer.sampleRate;
-        let estimatedSize = audioBuffer.length * audioBuffer.numberOfChannels * 2 + 44;
+        // 2. 적극적인 샘플링 레이트 최적화
+        let targetSampleRate = 8000; // 기본적으로 8kHz로 시작 (전화 품질, 음성 인식에 충분)
         
-        // 파일 크기가 너무 크면 샘플링 레이트를 줄임
-        if (estimatedSize > maxSizeBytes) {
-          // 16kHz로 다운샘플링 (음성에 충분한 품질)
-          targetSampleRate = 16000;
+        // 파일 길이에 따라 샘플링 레이트 조정
+        const durationMinutes = audioBuffer.duration / 60;
+        if (durationMinutes > 10) {
+          targetSampleRate = 8000; // 10분 이상: 8kHz
+        } else if (durationMinutes > 5) {
+          targetSampleRate = 11025; // 5-10분: 11kHz
+        } else {
+          targetSampleRate = 16000; // 5분 이하: 16kHz
+        }
+        
+        // 예상 파일 크기 계산 및 조정
+        let estimatedSize = (audioBuffer.duration * targetSampleRate * 2) + 44; // 16-bit mono + header
+        
+        console.log('Target sample rate:', targetSampleRate, 'Estimated size:', (estimatedSize / 1024 / 1024).toFixed(2), 'MB');
+        
+        // 여전히 크면 더 낮은 샘플링 레이트 사용
+        while (estimatedSize > maxSizeBytes && targetSampleRate > 4000) {
+          targetSampleRate = Math.max(4000, targetSampleRate * 0.75);
+          estimatedSize = (audioBuffer.duration * targetSampleRate * 2) + 44;
+          console.log('Reducing sample rate to:', targetSampleRate, 'New estimated size:', (estimatedSize / 1024 / 1024).toFixed(2), 'MB');
+        }
+        
+        // 리샘플링 적용
+        if (targetSampleRate !== audioBuffer.sampleRate) {
           audioBuffer = resampleAudio(audioBuffer, targetSampleRate, audioContext);
-          estimatedSize = audioBuffer.length * audioBuffer.numberOfChannels * 2 + 44;
-          
-          // 여전히 크면 8kHz로 (전화 품질)
-          if (estimatedSize > maxSizeBytes) {
-            targetSampleRate = 8000;
-            audioBuffer = resampleAudio(audioBuffer, targetSampleRate, audioContext);
-          }
+        }
+        
+        // 3. 필요시 오디오 길이 제한 (극단적인 경우)
+        const maxDurationSeconds = 600; // 10분 제한
+        if (audioBuffer.duration > maxDurationSeconds) {
+          const maxLength = Math.floor(maxDurationSeconds * audioBuffer.sampleRate);
+          audioBuffer = truncateAudio(audioBuffer, maxLength, audioContext);
+          console.log('Audio truncated to', maxDurationSeconds, 'seconds');
         }
         
         // WAV로 변환
         const wavBuffer = audioBufferToWav(audioBuffer);
         const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+        
+        console.log('Final converted file size:', (wavBlob.size / 1024 / 1024).toFixed(2), 'MB');
+        
+        // 크기 검증
+        if (wavBlob.size > maxSizeBytes) {
+          throw new Error(`변환된 파일이 여전히 너무 큽니다 (${(wavBlob.size / 1024 / 1024).toFixed(2)}MB). 더 짧은 오디오를 사용해주세요.`);
+        }
         
         // 새로운 파일명 생성
         const originalName = file.name.replace(/\.[^/.]+$/, "");
@@ -72,33 +106,47 @@ function convertToMono(audioBuffer: AudioBuffer, audioContext: AudioContext): Au
   return monoBuffer;
 }
 
-// 오디오 리샘플링
+// 오디오 리샘플링 (개선된 버전)
 function resampleAudio(audioBuffer: AudioBuffer, targetSampleRate: number, audioContext: AudioContext): AudioBuffer {
   const ratio = audioBuffer.sampleRate / targetSampleRate;
   const newLength = Math.floor(audioBuffer.length / ratio);
-  const resampledBuffer = audioContext.createBuffer(audioBuffer.numberOfChannels, newLength, targetSampleRate);
+  const resampledBuffer = audioContext.createBuffer(1, newLength, targetSampleRate); // 모노로 강제
   
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-    const inputData = audioBuffer.getChannelData(channel);
-    const outputData = resampledBuffer.getChannelData(channel);
+  const inputData = audioBuffer.getChannelData(0); // 첫 번째 채널만 사용
+  const outputData = resampledBuffer.getChannelData(0);
+  
+  // 간단한 선형 보간
+  for (let i = 0; i < newLength; i++) {
+    const sourceIndex = i * ratio;
+    const index = Math.floor(sourceIndex);
+    const fraction = sourceIndex - index;
     
-    for (let i = 0; i < newLength; i++) {
-      const sourceIndex = i * ratio;
-      const index = Math.floor(sourceIndex);
-      const fraction = sourceIndex - index;
-      
-      if (index + 1 < inputData.length) {
-        outputData[i] = inputData[index] * (1 - fraction) + inputData[index + 1] * fraction;
-      } else {
-        outputData[i] = inputData[index];
-      }
+    if (index + 1 < inputData.length) {
+      outputData[i] = inputData[index] * (1 - fraction) + inputData[index + 1] * fraction;
+    } else {
+      outputData[i] = inputData[index] || 0;
     }
   }
   
   return resampledBuffer;
 }
 
-
+// 오디오 길이 제한
+function truncateAudio(audioBuffer: AudioBuffer, maxLength: number, audioContext: AudioContext): AudioBuffer {
+  const truncatedBuffer = audioContext.createBuffer(
+    audioBuffer.numberOfChannels, 
+    Math.min(maxLength, audioBuffer.length), 
+    audioBuffer.sampleRate
+  );
+  
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+    const inputData = audioBuffer.getChannelData(channel);
+    const outputData = truncatedBuffer.getChannelData(channel);
+    outputData.set(inputData.slice(0, maxLength));
+  }
+  
+  return truncatedBuffer;
+}
 
 // AudioBuffer를 WAV 형식으로 변환
 function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {

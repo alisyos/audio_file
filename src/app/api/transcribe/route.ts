@@ -76,10 +76,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 파일 크기 제한 (25MB)
-    if (file.size > 25 * 1024 * 1024) {
+    // 파일 크기 제한 (4MB)
+    if (file.size > 4 * 1024 * 1024) {
       return NextResponse.json({ 
-        error: '파일 크기가 너무 큽니다. 25MB 이하의 파일만 업로드 가능합니다.' 
+        error: '파일 크기가 너무 큽니다. 4MB 이하의 파일만 업로드 가능합니다.' 
       }, { status: 400 });
     }
 
