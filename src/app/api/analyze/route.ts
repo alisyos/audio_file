@@ -5,6 +5,18 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// 프롬프트 가져오기 함수
+async function getPrompts() {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/prompts`);
+    const data = await response.json();
+    return data.prompts || [];
+  } catch (error) {
+    console.error('Error fetching prompts:', error);
+    return [];
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { text } = await request.json();
@@ -13,11 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No text provided' }, { status: 400 });
     }
 
-    const prompt = `
-다음 텍스트를 분석하여 가장 적절한 문서 유형 3가지를 제안해주세요. 
+    // 활성화된 프롬프트 가져오기
+    const prompts = await getPrompts();
+    const systemPrompt = prompts.find((p: any) => p.id === 'analyze-system' && p.isActive)?.prompt || 
+      '당신은 텍스트 내용을 분석하여 적절한 문서 형식을 제안하는 전문가입니다. 항상 JSON 형식으로 응답하세요.';
+    
+    const userPromptTemplate = prompts.find((p: any) => p.id === 'analyze-user' && p.isActive)?.prompt || 
+      `다음 텍스트를 분석하여 가장 적절한 문서 유형 3가지를 제안해주세요. 
 각 문서 유형에 대해 구체적인 목차를 포함해서 JSON 형식으로 응답해주세요.
 
-텍스트: "${text}"
+텍스트: "{text}"
 
 응답 형식:
 {
@@ -36,19 +53,21 @@ export async function POST(request: NextRequest) {
   ]
 }
 
-가능한 문서 유형: 회의록, 제안서, 인터뷰 요약, 강의 요약, 브레인스토밍 결과, 프로젝트 계획서, 업무 보고서, 연구 노트 등
-`;
+가능한 문서 유형: 회의록, 제안서, 인터뷰 요약, 강의 요약, 브레인스토밍 결과, 프로젝트 계획서, 업무 보고서, 연구 노트 등`;
+
+    // 템플릿에 텍스트 삽입
+    const userPrompt = userPromptTemplate.replace('{text}', text);
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: '당신은 텍스트 내용을 분석하여 적절한 문서 형식을 제안하는 전문가입니다. 항상 JSON 형식으로 응답하세요.'
+          content: systemPrompt
         },
         {
           role: 'user',
-          content: prompt
+          content: userPrompt
         }
       ],
       temperature: 0.7,

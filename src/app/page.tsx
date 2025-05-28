@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, FileAudio, Loader2, Download, FileText, CheckCircle } from 'lucide-react';
+import { Upload, FileAudio, Loader2, Download, FileText, CheckCircle, Settings } from 'lucide-react';
 import { DocumentSuggestion, AnalysisResponse, TranscriptionResponse, DocumentGenerationResponse } from '@/types';
+import Link from 'next/link';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -169,6 +170,15 @@ export default function Home() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
+          <div className="flex justify-end mb-4">
+            <Link 
+              href="/admin"
+              className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              관리자 페이지
+            </Link>
+          </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             🎙️ 음성파일 기반 문서 자동화 시스템
           </h1>

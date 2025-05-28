@@ -26,6 +26,22 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // m4a 파일의 경우 MIME 타입을 명시적으로 설정
+    let processedFile = file;
+    if (fileExtension === 'm4a') {
+      console.log('Processing M4A file - Original MIME type:', file.type);
+      // m4a 파일을 새로운 File 객체로 생성하여 MIME 타입을 명시적으로 설정
+      const arrayBuffer = await file.arrayBuffer();
+      console.log('M4A file buffer size:', arrayBuffer.byteLength);
+      
+      // 여러 MIME 타입을 시도해볼 수 있도록 준비
+      processedFile = new File([arrayBuffer], file.name, { 
+        type: 'audio/mp4' // m4a는 실제로 audio/mp4 컨테이너 형식
+      });
+      console.log('M4A file processed with MIME type:', processedFile.type);
+      console.log('File name preserved:', processedFile.name);
+    }
+
     // 파일 크기 제한 (25MB)
     if (file.size > 25 * 1024 * 1024) {
       return NextResponse.json({ 
@@ -35,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     // OpenAI transcriptions API를 사용하여 오디오를 텍스트로 변환
     const transcription = await openai.audio.transcriptions.create({
-      file: file,
+      file: processedFile,
       model: 'whisper-1',
       response_format: 'text',
       temperature: 0.1,
@@ -61,7 +77,7 @@ export async function POST(request: NextRequest) {
     // OpenAI API 에러인 경우 더 구체적인 메시지 제공
     if (error.status === 400 && error.message?.includes('Invalid file format')) {
       return NextResponse.json({ 
-        error: `파일 형식이 올바르지 않습니다. 파일이 손상되었거나 실제 형식이 다를 수 있습니다. 다른 m4a 파일로 시도해보세요.` 
+        error: `M4A 파일 처리 중 오류가 발생했습니다. 이 파일은 특정 인코딩 방식으로 인해 지원되지 않을 수 있습니다. 다음을 시도해보세요:\n\n1. 다른 M4A 파일로 시도\n2. MP3 형식으로 변환 후 업로드\n3. WAV 형식으로 변환 후 업로드` 
       }, { status: 400 });
     }
     
