@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, FileAudio, Loader2, Download, FileText, CheckCircle, Settings } from 'lucide-react';
+import { Upload, FileAudio, Loader2, Download, FileText, CheckCircle, Settings, RefreshCw } from 'lucide-react';
 import { DocumentSuggestion, AnalysisResponse, TranscriptionResponse, DocumentGenerationResponse } from '@/types';
 import Link from 'next/link';
+import { convertToOptimizedWav, canConvertAudio } from '@/utils/audioConverter';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,6 +18,8 @@ export default function Home() {
   const [generatedDocument, setGeneratedDocument] = useState('');
   const [error, setError] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertedFile, setConvertedFile] = useState<File | null>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -24,6 +27,7 @@ export default function Home() {
       setFile(selectedFile);
       setError('');
       setCurrentStep(1);
+      setConvertedFile(null);
       // 모든 후속 단계 상태 초기화
       setTranscribedText('');
       setSuggestions([]);
@@ -34,6 +38,33 @@ export default function Home() {
       setIsTranscribing(false);
       setIsAnalyzing(false);
       setIsGenerating(false);
+      setIsConverting(false);
+    }
+  };
+
+  // M4A 파일을 MP3로 변환
+  const handleConvertM4A = async () => {
+    if (!file) return;
+
+    setIsConverting(true);
+    setError('');
+
+    try {
+      const converted = await convertToOptimizedWav(file);
+      setConvertedFile(converted);
+      
+      // 변환 성공 메시지
+      const originalSizeMB = (file.size / 1024 / 1024).toFixed(2);
+      const convertedSizeMB = (converted.size / 1024 / 1024).toFixed(2);
+      const compressionRatio = ((1 - converted.size / file.size) * 100).toFixed(1);
+      
+      console.log(`파일 변환 완료: ${originalSizeMB}MB → ${convertedSizeMB}MB (${compressionRatio}% 압축)`);
+      setError('');
+    } catch (err) {
+      console.error('변환 오류:', err);
+      setError('파일 변환 중 오류가 발생했습니다. 브라우저가 이 파일 형식을 지원하지 않을 수 있습니다.');
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -45,7 +76,9 @@ export default function Home() {
 
     try {
       const formData = new FormData();
-      formData.append('audio', file);
+      // 변환된 파일이 있으면 그것을 사용, 없으면 원본 파일 사용
+      const fileToUpload = convertedFile || file;
+      formData.append('audio', fileToUpload);
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -159,10 +192,12 @@ export default function Home() {
     setEditableSuggestion(null);
     setGeneratedDocument('');
     setError('');
+    setConvertedFile(null);
     // 로딩 상태도 초기화
     setIsTranscribing(false);
     setIsAnalyzing(false);
     setIsGenerating(false);
+    setIsConverting(false);
   };
 
   return (
@@ -277,6 +312,9 @@ export default function Home() {
                   <p className="text-sm text-gray-500">
                     지원 형식: FLAC, M4A, MP3, MP4, MPEG, MPGA, OGA, OGG, WAV, WEBM (최대 25MB)
                   </p>
+                  <p className="text-xs text-orange-600 mt-1">
+                    ⚠️ M4A 파일 호환성 문제가 있을 경우 MP3로 변환 후 업로드해주세요
+                  </p>
                 </label>
               </div>
 
@@ -288,6 +326,47 @@ export default function Home() {
                   <p className="text-sm text-gray-500">
                     크기: {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
+                  
+                  {/* M4A 파일인 경우 변환 옵션 표시 */}
+                  {file.name.toLowerCase().endsWith('.m4a') && canConvertAudio() && (
+                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-sm text-orange-800 mb-2">
+                        ⚠️ M4A 파일은 호환성 문제가 있을 수 있습니다. 최적화된 WAV로 변환하는 것을 권장합니다.
+                      </p>
+                      <p className="text-xs text-orange-600 mb-2">
+                        최적화 변환: 모노 변환 + 낮은 샘플링 레이트 (16kHz/8kHz)로 파일 크기 대폭 감소
+                      </p>
+                      {!convertedFile ? (
+                        <button
+                          onClick={handleConvertM4A}
+                          disabled={isConverting}
+                          className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50 flex items-center"
+                        >
+                          {isConverting ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              최적화 중...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              최적화된 WAV로 변환
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="text-sm text-green-700">
+                          ✅ 최적화 완료: {convertedFile.name}
+                          <br />
+                          <span className="text-xs">
+                            크기: {(file.size / 1024 / 1024).toFixed(2)}MB → {(convertedFile.size / 1024 / 1024).toFixed(2)}MB 
+                            ({((1 - convertedFile.size / file.size) * 100).toFixed(1)}% 압축)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-center">
                     <button
                       onClick={handleTranscribe}
@@ -300,7 +379,12 @@ export default function Home() {
                           음성 변환 중...
                         </>
                       ) : (
-                        '음성 변환 시작'
+                        <>
+                          음성 변환 시작
+                          {convertedFile && (
+                            <span className="ml-1 text-xs">(변환된 파일 사용)</span>
+                          )}
+                        </>
                       )}
                     </button>
                   </div>
